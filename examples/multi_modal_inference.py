@@ -13,15 +13,20 @@ python examples/multi_modal_inference.py \
   --tensor-parallel-size 1 \
   --num-prompts 1
 """
+import os
+os.environ["SKIP_JAX_PRECOMPILE"] = "1"
 
 from contextlib import contextmanager
 from dataclasses import asdict
 from typing import NamedTuple, Optional
+import requests
+from PIL import Image
+from io import BytesIO
 
 from vllm import LLM, EngineArgs, SamplingParams
 from vllm.assets.image import ImageAsset
 from vllm.multimodal.image import convert_image_mode
-from vllm.utils.argparse_utils import FlexibleArgumentParser
+from vllm.utils import FlexibleArgumentParser
 
 
 class ModelRequestData(NamedTuple):
@@ -80,13 +85,16 @@ def get_multi_modal_input(args):
     """
     if args.modality == "image":
         # Input image and question
-        image = convert_image_mode(
-            ImageAsset("cherry_blossom").pil_image, "RGB")
+        image_url = "https://github.com/IS-Model-Framework/sglang-jax/blob/dev/vl/test/srt/example_image.png?raw=true"
+        
+        # Download image from URL
+        response = requests.get(image_url)
+        pil_image = Image.open(BytesIO(response.content))
+        image = convert_image_mode(pil_image, "RGB")
+        
+        image_token = "<|image_pad|>"  # This should match the placeholder used in the model
         img_questions = [
-            "What is the content of this image?",
-            "Describe the content of this image in detail.",
-            "What's in the image?",
-            "Where is this image taken?",
+            f"What's in this image?\n{image_token}",
         ]
 
         return {
